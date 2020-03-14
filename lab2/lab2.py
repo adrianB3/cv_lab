@@ -3,6 +3,7 @@ import numpy as np
 from queue import Queue
 
 VIDEO_PATH = "input.mp4"
+PROCESSED_VIDEO_PATH = "animation.mp4"
 
 
 def affine_linear_transform(x, range_a: tuple, range_b: tuple):
@@ -13,18 +14,21 @@ def affine_linear_transform(x, range_a: tuple, range_b: tuple):
 class Animation:
     def __init__(self):
         self.cap = cv2.VideoCapture(VIDEO_PATH)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.frame_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.out = cv2.VideoWriter(PROCESSED_VIDEO_PATH, fourcc, self.fps, (self.frame_width, self.frame_height))
         self.current_frame_nb = 0
-        self.prev_frame_delay = 2
+        self.prev_frame_delay = 1
+        self.intermediate_text = ""
+        self.sec_count = 0
 
     def process(self):
-        frame_buff = Queue(maxsize=self.prev_frame_delay)
-        prev_frame = None
+        frame_buff = Queue(maxsize=self.prev_frame_delay + 1)
         delay_counter = 0
-        isFirstSeq = True
+        is_first_seq = True
         while True:
             ret, frame = self.cap.read()
             if not ret:
@@ -33,24 +37,23 @@ class Animation:
 
             self.add_pulsating_circle(frame, debug_vis=True)
             self.add_translating_line(frame, debug_vis=True)
-            # self.add_text_seq(frame, "OpenCV")
+            self.add_text_seq(frame, "OpenCV")
             self.add_frame_counter(frame)
-            frame_buff.put(frame.copy()) # TODO
+            frame_buff.put(frame.copy())
             if delay_counter == self.prev_frame_delay:
-                # prev_frame = frame_buff.pop()
-                # delay_counter = 0
-                isFirstSeq = False
+                is_first_seq = False
             else:
                 delay_counter += 1
-            if not isFirstSeq:
-                self.add_prev_frame_over(frame=frame, prev_frame=frame_buff.get(), roi_dim=(250, 250))
+            if not is_first_seq:
+                self.add_prev_frame_over(frame=frame, prev_frame=frame_buff.get(), roi_dim=(100, 100))
+            self.out.write(frame)
             cv2.imshow("Animation", frame)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-            cv2.waitKey(1000)
 
         self.cap.release()
+        self.out.release()
         cv2.destroyAllWindows()
 
     def add_pulsating_circle(self, frame, debug_vis=False):
@@ -88,23 +91,37 @@ class Animation:
                         lineType=cv2.LINE_AA)
 
     def add_text_seq(self, frame, text):
-        # TODO
+
         if self.current_frame_nb % self.fps == 0:
-            for ch in text:
-                cv2.putText(img=frame,
-                            text=ch,
-                            org=(100, 100),
-                            color=(255, 0, 0),
-                            thickness=2,
-                            fontFace=cv2.QT_FONT_NORMAL, fontScale=1,
-                            lineType=cv2.LINE_AA)
+            self.sec_count += 1
+            self.intermediate_text = ""
+            if self.sec_count <= len(text):
+                for i in range(self.sec_count):
+                    self.intermediate_text += text[i]
+            else:
+                self.intermediate_text = text
+
+        cv2.putText(img=frame,
+                    text=self.intermediate_text,
+                    org=(100, 100),
+                    color=(255, 0, 0),
+                    thickness=2,
+                    fontFace=cv2.QT_FONT_NORMAL, fontScale=1,
+                    lineType=cv2.LINE_AA)
+
+        cv2.putText(img=frame,
+                    text=str(self.sec_count) + " s",
+                    org=(100, 200),
+                    color=(255, 0, 0),
+                    thickness=2,
+                    fontFace=cv2.QT_FONT_NORMAL, fontScale=1,
+                    lineType=cv2.LINE_AA)
 
     def add_prev_frame_over(self, frame, prev_frame, roi_dim: tuple = (100, 100)):
         prev = prev_frame.copy()
         if prev is not None:
             prev = cv2.resize(src=prev_frame, dsize=roi_dim)
-            # cv2.imshow("prev", prev)
-            frame[self.frame_height - roi_dim[0]: self.frame_height, self.frame_width - roi_dim[1]: self.frame_width, :] = prev
+            frame[self.frame_height - roi_dim[0]: self.frame_height, self.frame_width - roi_dim[1]: self.frame_width] = prev
 
     def add_frame_counter(self, frame):
         cv2.putText(img=frame,
