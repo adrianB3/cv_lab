@@ -18,15 +18,15 @@ class AlgoType(enum.Enum):
     b_dist_algo = 2
 
 
-VIDEO_PATH = os.path.abspath("D:\\recs\\test\\cc0ffeed-291914b0.mov")
+VIDEO_PATH = os.path.abspath("E:\\recs\\rain.mp4")
 isIonsRecs = False
 g_patch_size = 1
 ncc_mask_acc_no = 10
-frame_delay = 50
+frame_delay = 30
 current_mode = Mode.compute_every_frame
 current_algo = AlgoType.ncc_algo
 thresh_clear = 55000
-width = 240
+width = 340
 height = 160
 
 topLeft = (20, 20)
@@ -195,9 +195,9 @@ class Algo:
         # prev_frame_edgy = cv2.Canny(prev_frame, 100, 200)
         # frame_edgy = cv2.Canny(frame, 100, 200)
         mask = self.get_ncc_mask_cv2(prev_frame, frame)
-        cv2.accumulateWeighted(mask, self.accumulated_mask, 1)
-        cv2.convertScaleAbs(self.accumulated_mask, self.accumulated_mask)
-        # ret, thresh = cv2.threshold(self.accumulated_mask, 0, 255, cv2.THRESH_BINARY)
+        cv2.accumulateWeighted(mask, self.accumulated_mask, 0.8)
+        cv2.convertScaleAbs(self.accumulated_mask, self.accumulated_mask, 2, 0)
+        ret, thresh = cv2.threshold(self.accumulated_mask, 30, 255, cv2.THRESH_BINARY)
         sum = np.sum(self.accumulated_mask)
         status = ""
         if sum < thresh_clear:
