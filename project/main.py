@@ -18,15 +18,16 @@ class AlgoType(enum.Enum):
     b_dist_algo = 2
 
 
-VIDEO_PATH = os.path.abspath("E:\\recs\\clear_car.mp4")
+VIDEO_PATH = os.path.abspath("D:\\recs\\test\\cc0ffeed-291914b0.mov")
 isIonsRecs = False
 g_patch_size = 1
-ncc_mask_acc_no = 30
+ncc_mask_acc_no = 10
+frame_delay = 50
 current_mode = Mode.compute_every_frame
 current_algo = AlgoType.ncc_algo
 thresh_clear = 55000
-width = 180
-height = 100
+width = 240
+height = 160
 
 topLeft = (20, 20)
 bottomRight = (100, 250)
@@ -57,7 +58,7 @@ class System:
         if current_algo == AlgoType.ncc_algo:
             self.algo = Algo(width, height, g_patch_size)
         self.frameCountGlobal = 0
-        self.frame_delay = 30
+        self.frame_delay = frame_delay
         self.isPlaying = True
 
     def process(self):
@@ -98,7 +99,6 @@ class System:
                             cv2.imshow("F1", cv2.resize(to_show, (640, 320)))
                             cv2.imshow("F2", cv2.resize(prev, (640, 320)))
                             res = self.algo.process(prev, current_frame)
-
                             color[res > 0] = [0, 0, 255]
                             cv2.imshow("Processed", cv2.resize(color, (640, 320)))
 
@@ -108,7 +108,8 @@ class System:
                             cv2.imshow("F1", cv2.resize(to_show, (640, 320)))
                             cv2.imshow("F2", cv2.resize(prev, (640, 320)))
                             res = self.algo.process(prev, current_frame)
-                            cv2.imshow("Processed", cv2.resize(res, (640, 320)))
+                            color[res > 0] = [0, 0, 255]
+                            cv2.imshow("Processed", cv2.resize(color, (640, 320)))
                             frame_buff.queue.clear()
 
                     if current_mode == Mode.compute_with_fixed_frame:
@@ -119,7 +120,8 @@ class System:
                             else:
                                 cv2.imshow("F2", cv2.resize(fixed, (640, 320)))
                                 res = self.algo.process(fixed, current_frame)
-                                cv2.imshow("Processed", cv2.resize(res, (640, 320)))
+                                color[res > 0] = [0, 0, 255]
+                                cv2.imshow("Processed", cv2.resize(color, (640, 320)))
                         else:
                             frame_buff.queue.clear()
 
@@ -186,10 +188,10 @@ class Algo:
         return ncc_mask
 
     def process(self, prev_frame, frame):
-        # self.acc_count += 1
-        # if self.acc_count == ncc_mask_acc_no:
-        #     self.accumulated_mask = np.zeros((frame.shape[0], frame.shape[1]))
-        #     self.acc_count = 0
+        self.acc_count += 1
+        if self.acc_count == ncc_mask_acc_no:
+            self.accumulated_mask = np.zeros((frame.shape[0], frame.shape[1]))
+            self.acc_count = 0
         # prev_frame_edgy = cv2.Canny(prev_frame, 100, 200)
         # frame_edgy = cv2.Canny(frame, 100, 200)
         mask = self.get_ncc_mask_cv2(prev_frame, frame)
