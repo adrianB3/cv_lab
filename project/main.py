@@ -18,10 +18,11 @@ class AlgoType(enum.Enum):
     b_dist_algo = 2
 
 
-VIDEO_PATH = os.path.abspath("E:\\recs\\rain.mp4")
+VIDEO_PATH = os.path.abspath("E:\\recs\\clear_car.mp4")
+OUT_VIDEO_PATH = "demo.mp4"
 isIonsRecs = False
 g_patch_size = 1
-ncc_mask_acc_no = 10
+ncc_mask_acc_no = 30
 frame_delay = 30
 current_mode = Mode.compute_every_frame
 current_algo = AlgoType.ncc_algo
@@ -29,8 +30,8 @@ thresh_clear = 55000
 width = 340
 height = 160
 
-topLeft = (20, 20)
-bottomRight = (100, 250)
+topLeft = (0, 0)
+bottomRight = (150, 250)
 x, y = topLeft[0], topLeft[1]
 w, h = bottomRight[0] - topLeft[0], bottomRight[1] - topLeft[1]
 
@@ -39,7 +40,7 @@ COL_DIVISOR = 40
 
 def add_blurness(frame):
     ROI = frame[y:y+h, x:x+w]
-    blur = cv2.GaussianBlur(ROI, (51, 51), 0)
+    blur = cv2.GaussianBlur(ROI, (91, 91), 10)
     frame[y:y+h, x:x+w] = blur
     return frame
 
@@ -47,12 +48,14 @@ def add_blurness(frame):
 class System:
     def __init__(self):
         self.capture = cv2.VideoCapture(VIDEO_PATH)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         if not self.capture.isOpened():
             raise FileNotFoundError("Video file not found.")
         self.frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.frame_width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.frame_height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.fps = self.capture.get(cv2.CAP_PROP_FPS)
+        self.out = cv2.VideoWriter(OUT_VIDEO_PATH, fourcc, 15, (self.frame_width, self.frame_height))
         if current_algo == AlgoType.b_dist_algo:
             self.algo = BDistAlgo(COL_DIVISOR, ROW_DIVISOR)
         if current_algo == AlgoType.ncc_algo:
@@ -79,7 +82,7 @@ class System:
                     current_frame = cv2.resize(current_frame, (width, height))
                     color = current_frame.copy()
                     current_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
-                    # current_frame = add_blurness(current_frame)
+                    current_frame = add_blurness(current_frame)
                     frame_buff.put(current_frame.copy())
                     to_show = current_frame.copy()
                     self.add_frame_nb(to_show)
@@ -100,7 +103,10 @@ class System:
                             cv2.imshow("F2", cv2.resize(prev, (640, 320)))
                             res = self.algo.process(prev, current_frame)
                             color[res > 0] = [0, 0, 255]
+                            self.add_frame_nb(color)
+                            self.out.write(cv2.resize(color, (self.frame_width, self.frame_height)))
                             cv2.imshow("Processed", cv2.resize(color, (640, 320)))
+
 
                     if current_mode == Mode.compute_first_last_frame:
                         if is_seq_complete:
@@ -133,7 +139,9 @@ class System:
                 else:
                     break
         cv2.waitKey()
+
         self.capture.release()
+        self.out.release()
         cv2.destroyAllWindows()
 
     def add_frame_nb(self, frame):
@@ -192,8 +200,6 @@ class Algo:
         if self.acc_count == ncc_mask_acc_no:
             self.accumulated_mask = np.zeros((frame.shape[0], frame.shape[1]))
             self.acc_count = 0
-        # prev_frame_edgy = cv2.Canny(prev_frame, 100, 200)
-        # frame_edgy = cv2.Canny(frame, 100, 200)
         mask = self.get_ncc_mask_cv2(prev_frame, frame)
         cv2.accumulateWeighted(mask, self.accumulated_mask, 0.8)
         cv2.convertScaleAbs(self.accumulated_mask, self.accumulated_mask, 2, 0)
@@ -204,8 +210,6 @@ class Algo:
             status = "clear"
         if sum > thresh_clear:
             status = "artifacts"
-        # result = frame.copy()
-        # result[self.accumulated_mask > 0] = [255]
         return self.accumulated_mask
 
 
@@ -254,11 +258,7 @@ class BDistAlgo:
         result = np.zeros((self.row_divisor, self.col_divisor))
         arr = np.asarray(cmp_res)
         result = np.reshape(arr, (self.row_divisor, self.col_divisor))
-
         cv2.normalize(result, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
-        # if dist small => similar else different
-        # img_arr = np.split(np.array(frame_grid), 10)
-        # igm = cv2.vconcat([cv2.hconcat(ims) for ims in img_arr])
 
         return result
 
